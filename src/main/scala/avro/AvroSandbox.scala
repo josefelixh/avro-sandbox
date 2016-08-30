@@ -14,10 +14,12 @@ import org.apache.avro.util.{ ByteBufferInputStream, ByteBufferOutputStream }
 
 object AvroSandbox extends App {
 
-  implicit val system = ActorSystem("avro-sandbox")
-  implicit val mat = ActorMaterializer()
+//  implicit val system = ActorSystem("avro-sandbox")
+//  implicit val mat = ActorMaterializer()
 
-  val file = new File("users.txt")
+  val file1 = new File("users1.txt")
+  val file2 = new File("users2.txt")
+  val file3 = new File("users3.txt")
 
   val avroSchemaVersion1 = new Schema.Parser().parse {
     s"""
@@ -50,25 +52,48 @@ object AvroSandbox extends App {
     """.stripMargin
   }
 
-  def produce() = {
+  val avroSchemaVersion3 = new Schema.Parser().parse {
+    s"""
+       |{"namespace": "example.avro",
+       | "type": "record",
+       | "name": "User",
+       | "fields": [
+       |     {"name": "name", "type": "string"},
+       |     {"name": "favorite_number",  "type": ["int", "null"]},
+       |     {"name": "favorite_color", "type": ["string", "null"]},
+       |     {"name": "version", "type": "int"},
+       |     {"name": "van", "type": "string", "default": "NONE"}
+       | ]
+       |}
+    """.stripMargin
+  }
+
+  def produce(schema: Schema, file: File) = {
+//    println("Producing with schema " + schema)
     val idx = 0
 
-    val record = new GenericData.Record(avroSchemaVersion2)
+    val record = new GenericData.Record(schema)
     record.put("name", s"Name:$idx")
     record.put("favorite_number", idx)
-    record.put("version", 1)
-//    record.put("car", "British Leyland Mini")
+    record.put("version", idx)
 
-    val datumWriter = new GenericDatumWriter[GenericRecord](avroSchemaVersion2)
+    schema match {
+      case `avroSchemaVersion1` => println(s"Producing v1 file $file"); record.put("car", "British Leyland Mini")
+      case `avroSchemaVersion2` => println(s"Producing v2 file $file"); ()
+      case `avroSchemaVersion3` => println(s"Producing v3 file $file"); record.put("van", "DKV")
+    }
+
+    val datumWriter = new GenericDatumWriter[GenericRecord](schema)
     val dataFileWriter = new DataFileWriter[GenericRecord](datumWriter)
-    dataFileWriter.create(avroSchemaVersion2, file)
+    dataFileWriter.create(schema, file)
     dataFileWriter.append(record)
     dataFileWriter.close()
   }
 
 
-  def consume() = {
-    val datumReader = new GenericDatumReader[GenericRecord](avroSchemaVersion1)
+  def consume(schema: Schema, file: File, version: String) = {
+    println(s"Consuming $version from file $file")
+    val datumReader = new GenericDatumReader[GenericRecord](schema)
     val dataFileReader = new DataFileReader[GenericRecord](file, datumReader)
 
     while (dataFileReader.hasNext) {
@@ -78,46 +103,20 @@ object AvroSandbox extends App {
     dataFileReader.close()
   }
 
+  produce(avroSchemaVersion1, file1)
+  produce(avroSchemaVersion2, file2)
+  produce(avroSchemaVersion3, file3)
 
-  produce()
-  consume()
+  consume(avroSchemaVersion1, file1, "v1")
+  consume(avroSchemaVersion1, file2, "v1")
+  consume(avroSchemaVersion1, file3, "v1")
 
+  consume(avroSchemaVersion2, file1, "v2")
+  consume(avroSchemaVersion2, file2, "v2")
+  consume(avroSchemaVersion2, file3, "v2")
 
-//  val serialise = Flow.fromGraph(GraphDSL.create() { implicit builder =>
-//    import GraphDSL.Implicits._
-//
-//    val toBothSerializers = builder.add(Broadcast[Int](2))
-//
-//    def version(version: Int) = builder.add(Flow[Int].map { idx =>
-//      s"version$version message index: $idx"
-//
-//      val outputStream = new ByteBufferOutputStream
-//      val encoder = EncoderFactory.get().jsonEncoder(avroSchemaVersion, outputStream)
-//      datumWriter.write(record, encoder)
-//      encoder
-//      new ByteBufferInputStream(outputStream.getBufferList)
-//    } map { stream =>
-//      val inputStream =
-//
-//      val datumReader = new GenericDatumReader[GenericRecord](avroSchemaVersion(1))
-//
-//      var record: GenericRecord = null
-//
-//      datumReader.read(record, DecoderFactory.get().jsonDecoder(avroSchemaVersion(1), inputStream))
-//      println(record)
-//      record
-//    })
-//
-//    val toSingleOut = builder.add(Merge[GenericRecord](2))
-//
-//    toBothSerializers ~> version(1) ~> toSingleOut
-//    toBothSerializers ~> version(2) ~> toSingleOut
-//
-//    FlowShape(toBothSerializers.in, toSingleOut.out)
-//  })
-//
-//  Source(1 to 10)
-//    .via { serialise }
-//    .runForeach(println)
+  consume(avroSchemaVersion3, file1, "v3")
+  consume(avroSchemaVersion3, file2, "v3")
+  consume(avroSchemaVersion3, file3, "v3")
 
 }
