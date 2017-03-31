@@ -7,7 +7,6 @@ import akka.stream.{ ActorMaterializer, FlowShape }
 import akka.stream.scaladsl.{ Broadcast, Flow, GraphDSL, Merge, Source }
 import org.apache.avro.Schema
 import org.apache.avro.file.{ DataFileReader, DataFileWriter }
-import org.apache.avro.generic.GenericData.Record
 import org.apache.avro.generic.{ GenericData, GenericDatumReader, GenericDatumWriter, GenericRecord }
 import org.apache.avro.io.{ DecoderFactory, EncoderFactory, JsonEncoder }
 import org.apache.avro.util.{ ByteBufferInputStream, ByteBufferOutputStream }
@@ -21,7 +20,7 @@ object AvroSandbox extends App {
   val file2 = new File("users2.txt")
   val file3 = new File("users3.txt")
 
-  val avroSchemaVersion1 = new Schema.Parser().parse {
+  val avroSchemaVersion1: Schema = new Schema.Parser().parse {
     s"""
       |{"namespace": "example.avro",
       | "type": "record",
